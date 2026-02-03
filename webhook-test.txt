@@ -1,0 +1,75 @@
+WebHook Setup
+-------------
+
+# Install Webhook
+sudo apt -y install webhook
+
+
+# Configure webhook
+
+## Command for the webhook 
+
+"/opt/webhook-deploy.sh"
+
+#!/bin/bash
+set -e
+
+echo "$(date) - $(hostname) - Deploying ..." >> /var/log/deploy.log
+
+## Webhook config (list of hooks)
+"/opt/hooks.json" 
+[
+  {
+    "id": "deploy-service",
+    "execute-command": "/opt/webhook-deploy.sh",
+    "command-working-directory": "/opt",
+    "pass-arguments-to-command": [],
+    "response-message": "{\"status\": \"success\", \"message\": \"Deployment triggered!\"}",
+    "response-headers": [
+      {
+        "name": "Content-Type",
+        "value": "application/json"
+      }
+    ],
+    "include-command-output-in-response": false
+  }
+]
+
+the id is the name of the path when making the POST request
+{ip_address:port}/hooks/{id}
+
+## Test 
+webhook -verbose -hooks /opt/hooks.json -port 9099
+
+
+# Make it a systemd service for easier liveness management
+"/etc/systemd/system/webhook.service"
+
+[Unit]
+Description=Webhook Trigger Service
+After=network.target
+
+[Service]
+ExecStart=/opt/run-webhook.sh
+Restart=always
+User=root
+
+[Install]
+WantedBy=multi-user.target
+
+## The start command is a script that writes logs and error logs to files
+
+"/opt/run-webhook.sh"
+/usr/bin/webhook -verbose -hooks /opt/hooks.json -port 9099 >> /var/log/webhook.log 2>> /var/log/webhook.err
+
+
+# Restart the systemd daemon to sync new services
+"sudo systemctl deamon-reload" 
+
+
+# Add the webhook service to systemd
+"sudo systemctl enable --now webhook.service"
+"sudo systemctl start webhook.service"
+
+# Check the status of the service
+"sudo systemctl status webhook.service"
